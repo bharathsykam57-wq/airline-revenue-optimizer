@@ -1,0 +1,39 @@
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="arof"
+LABEL version="0.1.0"
+
+WORKDIR /app
+
+# System dependencies
+# build-essential: needed for some Python packages on slim image
+# curl: needed for healthchecks
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies first — layer caching
+# If requirements.txt unchanged, this layer is not rebuilt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Application source
+COPY src/ ./src/
+COPY configs/ ./configs/
+
+# Never run as root in production
+RUN useradd -m -u 1000 arof && chown -R arof:arof /app
+USER arof
+
+# PYTHONPATH so src/ imports work
+ENV PYTHONPATH=/app
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
