@@ -1,0 +1,79 @@
+# configs/config.yaml
+# Non-secret configuration only.
+# Secrets come from .env via pydantic-settings.
+
+project:
+  name: "airline-revenue-optimizer"
+  version: "0.1.0"
+  description: >
+    Production-patterned ML framework for airline demand
+    forecasting and price optimization. Built on BTS public
+    data with synthetic booking window modeling.
+    Limitations documented explicitly in README.
+
+data:
+  raw_path: "data/raw"
+  processed_path: "data/processed"
+  features_path: "data/features"
+  synthetic_path: "data/synthetic"
+  external_path: "data/external"
+
+routes:
+  - id: "JFK-LAX"
+    origin: "JFK"
+    destination: "LAX"
+    distance_km: 3983
+    price_elasticity_leisure: -1.8
+    price_elasticity_business: -0.7
+    business_share: 0.35
+    base_capacity: 180
+
+  - id: "ORD-MIA"
+    origin: "ORD"
+    destination: "MIA"
+    distance_km: 2163
+    price_elasticity_leisure: -2.1
+    price_elasticity_business: -0.9
+    business_share: 0.25
+    base_capacity: 150
+
+  - id: "LAX-SEA"
+    origin: "LAX"
+    destination: "SEA"
+    distance_km: 1537
+    price_elasticity_leisure: -1.6
+    price_elasticity_business: -0.8
+    business_share: 0.30
+    base_capacity: 160
+
+optimization:
+  price_min_usd: 89
+  price_max_usd: 1200
+  price_grid_steps: 100
+  min_load_factor: 0.60
+  max_price_change_pct: 0.15
+
+model:
+  lightgbm:
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 500
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+  quantiles: [0.1, 0.5, 0.9]
+  test_year: 2023
+  validation_year: 2022
+
+monitoring:
+  psi_threshold: 0.2
+  ks_pvalue_threshold: 0.05
+  revenue_drop_threshold: 0.10
+  cusum_threshold: 5.0
+
+redis:
+  ttl_far: 21600      # >30 days to departure — 6 hours
+  ttl_mid: 3600       # 7-30 days — 1 hour
+  ttl_near: 300       # 1-7 days — 5 minutes
+  ttl_imminent: 60    # <1 day — 1 minute
+  ttl_simulation: 300
