@@ -60,24 +60,24 @@ class FeatureEngineer:
 
         # Route-level baseline demand (train period only)
         self._train_stats["route_avg_demand"] = (
-            train_df.groupby("ROUTE")["total_passengers"].mean().to_dict()
+            train_df.groupby("ROUTE")["passengers_per_departure"].mean().to_dict()
         )
 
         # Route-level demand std (for normalization)
         self._train_stats["route_std_demand"] = (
-            train_df.groupby("ROUTE")["total_passengers"].std().to_dict()
+            train_df.groupby("ROUTE")["passengers_per_departure"].std().to_dict()
         )
 
         # Monthly seasonality index per route (train only)
         monthly_avg = (
-            train_df.groupby(["ROUTE", "MONTH"])["total_passengers"]
+            train_df.groupby(["ROUTE", "MONTH"])["passengers_per_departure"]
             .mean()
             .reset_index()
         )
-        route_avg = train_df.groupby("ROUTE")["total_passengers"].mean()
+        route_avg = train_df.groupby("ROUTE")["passengers_per_departure"].mean()
 
         monthly_avg["seasonality_index"] = monthly_avg.apply(
-            lambda r: r["total_passengers"] / route_avg[r["ROUTE"]], axis=1
+            lambda r: r["passengers_per_departure"] / route_avg[r["ROUTE"]], axis=1
         )
         self._train_stats["seasonality_index"] = monthly_avg.set_index(
             ["ROUTE", "MONTH"]
@@ -161,27 +161,27 @@ class FeatureEngineer:
             mask = df["ROUTE"] == route
 
             # lag_1m — previous month passengers
-            df.loc[mask, "lag_1m_passengers"] = df.loc[mask, "total_passengers"].shift(
-                1
-            )
+            df.loc[mask, "lag_1m_passengers"] = df.loc[
+                mask, "passengers_per_departure"
+            ].shift(1)
 
             # lag_12m — same month previous year
-            df.loc[mask, "lag_12m_passengers"] = df.loc[mask, "total_passengers"].shift(
-                12
-            )
+            df.loc[mask, "lag_12m_passengers"] = df.loc[
+                mask, "passengers_per_departure"
+            ].shift(12)
 
             # rolling_3m — 3-month rolling average (excluding current)
             df.loc[mask, "rolling_3m_passengers"] = (
-                df.loc[mask, "total_passengers"]
+                df.loc[mask, "passengers_per_departure"]
                 .shift(1)
                 .rolling(window=3, min_periods=1)
                 .mean()
             )
 
             # year_over_year_growth — % change vs same month last year
-            df.loc[mask, "yoy_growth"] = df.loc[mask, "total_passengers"].pct_change(
-                periods=12
-            )
+            df.loc[mask, "yoy_growth"] = df.loc[
+                mask, "passengers_per_departure"
+            ].pct_change(periods=12)
 
         return df
 
@@ -200,7 +200,7 @@ class FeatureEngineer:
 
         df["demand_vs_route_avg"] = df.apply(
             lambda r: (
-                r["total_passengers"]
+                r["passengers_per_departure"]
                 / self._train_stats["route_avg_demand"].get(r["ROUTE"], 1.0)
             ),
             axis=1,

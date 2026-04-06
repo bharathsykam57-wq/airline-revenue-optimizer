@@ -188,10 +188,22 @@ class BTSLoader:
             .agg(
                 total_passengers=("PASSENGERS", "sum"),
                 total_seats=("SEATS", "sum"),
+                total_departures=("DEPARTURES_PERFORMED", "sum"),
                 num_carriers=("UNIQUE_CARRIER", "nunique"),
                 avg_load_factor=("LOAD_FACTOR", "mean"),
             )
             .reset_index()
+        )
+
+        # Per-departure demand — correct scale for single-flight optimization
+        # Route-level passengers / departures = avg passengers per flight
+        # This is what one flight actually sees — optimization scale
+        df["passengers_per_departure"] = (
+            df["total_passengers"] / df["total_departures"]
+        ).round(1)
+
+        df["seats_per_departure"] = (df["total_seats"] / df["total_departures"]).round(
+            1
         )
 
         # Create date column

@@ -93,6 +93,7 @@ class DemandModelTrainer:
                         train_df=train_features,
                         val_df=val_features,
                         feature_columns=feature_cols,
+                        target_column="passengers_per_departure",
                     )
                     self.models[route] = model
                     all_metrics[route] = metrics

@@ -65,6 +65,8 @@ class BTSValidator:
             "DEST",
             "total_passengers",
             "total_seats",
+            "total_departures",
+            "passengers_per_departure",
             "avg_load_factor",
             "DATE",
         }

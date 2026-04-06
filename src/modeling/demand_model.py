@@ -2,7 +2,7 @@
 LightGBM demand forecasting model with quantile regression.
 
 Architecture:
-- One model set per route (6 routes = 6 × 3 quantile models = 18 models)
+- One model set per route (6 routes = 6 cross 3 quantile models = 18 models)
 - Quantiles: [0.10, 0.50, 0.90] — conservative, expected, optimistic
 - All runs logged to MLflow for experiment tracking
 - SHAP values computed for interpretability
@@ -28,7 +28,7 @@ import mlflow
 import mlflow.lightgbm
 from src.utils.logger import logger
 
-QUANTILES = [0.10, 0.50, 0.90]
+QUANTILES = [0.05, 0.50, 0.95]
 QUANTILE_NAMES = ["q10", "q50", "q90"]
 
 # LightGBM parameters — justified in DECISIONS.md
@@ -180,7 +180,11 @@ class DemandModel:
 
         predictions = {}
         for name, model in self.models.items():
-            predictions[name] = model.predict(X[self.feature_columns])
+            # Handle both LGBMRegressor (training) and Booster (loaded)
+            if isinstance(model, lgb.Booster):
+                predictions[name] = model.predict(X[self.feature_columns].values)
+            else:
+                predictions[name] = model.predict(X[self.feature_columns])
 
         # Enforce quantile ordering — q10 <= q50 <= q90
         predictions = self._enforce_quantile_order(predictions)
@@ -198,7 +202,11 @@ class DemandModel:
         """
         predictions = {}
         for name, model in self.models.items():
-            predictions[name] = model.predict(X[self.feature_columns])
+            # Handle both LGBMRegressor (training) and Booster (loaded)
+            if isinstance(model, lgb.Booster):
+                predictions[name] = model.predict(X[self.feature_columns].values)
+            else:
+                predictions[name] = model.predict(X[self.feature_columns])
         predictions = self._enforce_quantile_order(predictions)
         return predictions
 
@@ -304,11 +312,19 @@ class DemandModel:
         if "q50" not in self.models:
             raise RuntimeError("Model not trained")
 
+        model = self.models["q50"]
+
+        # Handle both LGBMRegressor and Booster
+        if isinstance(model, lgb.Booster):
+            importance_values = model.feature_importance(importance_type="gain")
+        else:
+            importance_values = model.feature_importances_
+
         importance = (
             pd.DataFrame(
                 {
                     "feature": self.feature_columns,
-                    "importance": self.models["q50"].feature_importances_,
+                    "importance": importance_values,
                 }
             )
             .sort_values("importance", ascending=False)
@@ -338,7 +354,10 @@ class DemandModel:
 
     @classmethod
     def load(cls, model_dir: str, route: str) -> "DemandModel":
-        """Load saved model from disk."""
+        """
+        Load saved model from disk.
+        Uses lgb.Booster directly — avoids sklearn wrapper state issue.
+        """
         path = Path(model_dir) / route.replace("-", "_")
 
         with open(path / "metadata.json") as f:
@@ -347,11 +366,12 @@ class DemandModel:
         instance = cls(route=route)
         instance.feature_columns = metadata["feature_columns"]
 
+        # Load as lgb.Booster directly — not LGBMRegressor wrapper
+        # LGBMRegressor.predict() requires fit() to have been called.
+        # lgb.Booster.predict() works correctly on loaded models.
         for name in metadata["quantiles"]:
             booster = lgb.Booster(model_file=str(path / f"{name}.txt"))
-            model = lgb.LGBMRegressor()
-            model._Booster = booster
-            instance.models[name] = model
+            instance.models[name] = booster
 
         instance._is_trained = True
         logger.info(f"Model loaded from {path}")
